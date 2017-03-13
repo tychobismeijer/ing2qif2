@@ -1,17 +1,27 @@
 import argparse
 from collections import namedtuple
 import csv
+import datetime
 from decimal import Decimal
 from enum import Enum
 
 
-class QifEntry(namedtuple('QifEntryTuple', ['date', 'amount', 'memo'])):
+_QifEntryTuple = namedtuple(
+    'QifEntryTuple',
+    ['date', 'amount', 'payee', 'memo'],
+)
+
+
+class QifEntry(_QifEntryTuple):
     __slots__ = ()
 
     def serialize(self):
         lines = list()
-        lines.append("^")
         lines.append("T" + str(self.amount))
+        lines.append("D" + self.date.strftime("%m/%d/%Y"))
+        lines.append("P" + str(self.payee))
+        lines.append("M" + str(self.memo))
+        lines.append("^")
         return "\n".join(lines)
 
 
@@ -20,9 +30,14 @@ class InOut(Enum):
     OUT = 2
 
 
-class IngEntry(namedtuple('IngEntryTuple', ['date', 'description', 'account',
-        'counter_party_account', 'code', 'in_out', 'amount', 'category',
-        'info'])):  # noqa
+_IngEntryTuple = namedtuple(
+    'IngEntryTuple',
+    ['date', 'description', 'account',
+     'counter_party_account', 'code', 'in_out', 'amount', 'category', 'memo'],
+)
+
+
+class IngEntry(_IngEntryTuple):
     __slots__ = ()
 
     def to_qif(self):
@@ -33,7 +48,8 @@ class IngEntry(namedtuple('IngEntryTuple', ['date', 'description', 'account',
         return QifEntry(
             date=self.date,
             amount=amount,
-            memo=self.description
+            memo=self.memo,
+            payee=self.description
         )
 
 
@@ -53,13 +69,16 @@ class IngCsvFileReader():
     def parse_amount(self, s):
         return Decimal(s.replace(",", "."))
 
+    def parse_date(self, s):
+        return datetime.datetime.strptime(s, "%Y%m%d").date()
+
     def __iter__(self):
         return self
 
     def __next__(self):
         d = next(self.file)
         return IngEntry(
-            date=d["Datum"],
+            date=self.parse_date(d["Datum"]),
             description=d["Naam / Omschrijving"],
             account=d["Rekening"],
             counter_party_account=d["Tegenrekening"],
@@ -67,7 +86,7 @@ class IngCsvFileReader():
             in_out=self.parse_in_out(d["Af Bij"]),
             amount=self.parse_amount(d["Bedrag (EUR)"]),
             category=d["MutatieSoort"],
-            info=d["Mededelingen"],
+            memo=d["Mededelingen"],
         )
 
 
@@ -75,6 +94,10 @@ class QifFileWriter():
 
     def __init__(self, file):
         self.file = file
+        self.write_header()
+
+    def write_header(self):
+        self.file.write('!Type:Bank\n')
 
     def write_entry(self, e):
         self.file.write(e.serialize())
@@ -105,5 +128,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     convert_file(args.csvfile, args.out)
-
-    args.csvfile
