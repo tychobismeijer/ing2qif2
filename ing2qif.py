@@ -85,7 +85,7 @@ class IngCsvFileReader():
             code=d["Code"],
             in_out=self.parse_in_out(d["Af Bij"]),
             amount=self.parse_amount(d["Bedrag (EUR)"]),
-            category=d["MutatieSoort"],
+            category=d["Mutatiesoort"],
             memo=d["Mededelingen"],
         )
 
